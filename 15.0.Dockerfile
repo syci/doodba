@@ -1,10 +1,10 @@
-FROM python:3.8-slim-bullseye AS base
+FROM python:3.8-bullseye AS base
 
 EXPOSE 8069 8072
 
-ARG GEOIP_UPDATER_VERSION=4.3.0
-ARG WKHTMLTOPDF_VERSION=0.12.5
-ARG WKHTMLTOPDF_CHECKSUM='dfab5506104447eef2530d1adb9840ee3a67f30caaad5e9bcb8743ef2f9421bd'
+ARG GEOIP_UPDATER_VERSION=4.9.0
+ARG WKHTMLTOPDF_VERSION=0.12.6-1
+ARG WKHTMLTOPDF_CHECKSUM='d2929792fdc95fa66d637ecbf9cd0dce874f53d783d5ddcf947a86c007c81c95'
 ENV DB_FILTER=.* \
     DEPTH_DEFAULT=1 \
     DEPTH_MERGE=100 \
@@ -36,7 +36,7 @@ ENV DB_FILTER=.* \
 RUN apt-get -qq update \
     && apt-get install -yqq --no-install-recommends \
         curl \
-    && curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}-1.buster_amd64.deb \
+    && curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}.buster_arm64.deb \
     && echo "${WKHTMLTOPDF_CHECKSUM} wkhtmltox.deb" | sha256sum -c - \
     && apt-get install -yqq --no-install-recommends \
         ./wkhtmltox.deb \
@@ -55,9 +55,9 @@ RUN apt-get -qq update \
     && echo 'deb http://apt.postgresql.org/pub/repos/apt/ bullseye-pgdg main' >> /etc/apt/sources.list.d/postgresql.list \
     && curl -SL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
     && apt-get update \
-    && curl --silent -L --output geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb https://github.com/maxmind/geoipupdate/releases/download/v${GEOIP_UPDATER_VERSION}/geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb \
-    && dpkg -i geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb \
-    && rm geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb \
+    && curl --silent -L --output geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb https://github.com/maxmind/geoipupdate/releases/download/v${GEOIP_UPDATER_VERSION}/geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb \
+    && dpkg -i geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb \
+    && rm geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb \
     && apt-get autopurge -yqq \
     && rm -Rf wkhtmltox.deb /var/lib/apt/lists/* /tmp/* \
     && sync
@@ -113,11 +113,14 @@ RUN build_deps=" \
         tcl-dev \
         tk-dev \
         zlib1g-dev \
+        libssl-dev \
     " \
     && apt-get update \
     && apt-get install -yqq --no-install-recommends $build_deps \
+    && curl -SLo requirements.txt https://raw.githubusercontent.com/$ODOO_SOURCE/$ODOO_VERSION/requirements.txt \
+    && sed -i 's/gevent==20.9.0/gevent==20.12.0/g' requirements.txt \
     && pip install \
-        -r https://raw.githubusercontent.com/$ODOO_SOURCE/$ODOO_VERSION/requirements.txt \
+        -r ./requirements.txt \
         'websocket-client~=0.56' \
         astor \
         # Install fix from https://github.com/acsone/click-odoo-contrib/pull/93
