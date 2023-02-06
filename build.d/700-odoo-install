@@ -10,7 +10,13 @@ if [ "$PIP_INSTALL_ODOO" == true ]; then
     pip install $args --editable $src
 else
     log WARNING Blindly symlinking odoo executable
-    bin=$src/odoo-bin
+    if [ "$ODOO_VERSION" = "8.0" ]; then
+        bin=$src/openerp-server
+        ln -s /opt/odoo/custom/src/openerp-{gevent,server} /usr/local/bin/
+
+    else
+        bin=$src/odoo-bin
+    fi
     # Cannot check for scripts existence and link all: they probably do not
     # exist yet at build time! Just check Odoo version and act properly.
     ln -s $bin $dst
