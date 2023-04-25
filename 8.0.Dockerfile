@@ -34,10 +34,12 @@ ENV DB_FILTER=.* \
     WDB_WEB_PORT=1984 \
     WDB_WEB_SERVER=localhost
 
+# Debian stretch was moved to archive (and stretch-updates does not exist in archive)
+RUN sed -i 's,http://deb.debian.org,http://archive.debian.org,g;s,http://security.debian.org,http://archive.debian.org,g;s,\(.*stretch-updates\),#\1,' /etc/apt/sources.list
+
 # Other requirements and recommendations to run Odoo
 # See https://github.com/$ODOO_SOURCE/blob/$ODOO_VERSION/debian/control
-RUN sed -Ei 's@(^deb http://deb.debian.org/debian stretch-updates main$)@#\1@' /etc/apt/sources.list \
-    && apt-get update  \
+RUN apt-get update  \
     && apt-get -yqq  upgrade \
     && apt-get install -yqq  --no-install-recommends \
         python ruby-compass \
