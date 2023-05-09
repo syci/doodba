@@ -12,7 +12,7 @@ else
     log WARNING Blindly symlinking odoo executable
         if [ "$ODOO_VERSION" = "8.0" ]; then
          bin=$src/openerp-server
-         ln -s /opt/odoo/custom/src/openerp-{gevent,server} /usr/local/bin/
+         ln -s /opt/odoo/custom/src/odoo/openerp-{gevent,server} /usr/local/bin/
 
      else
          bin=$src/odoo-bin

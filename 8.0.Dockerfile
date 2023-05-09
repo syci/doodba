@@ -1,11 +1,10 @@
-FROM debian:stretch AS base
+FROM debian:buster AS base
 
 EXPOSE 8069 8072
 
 ARG GEOIP_UPDATER_VERSION=4.9.0
 ARG MQT=https://github.com/OCA/maintainer-quality-tools.git
-ARG WKHTMLTOPDF_VERSION=0.12.6-1
-ARG WKHTMLTOPDF_CHECKSUM='7b6833a8e1899cc172d384674aee42bfdd83932f0e4cda5ec33c0ff298c31ccd'
+ARG WKHTMLTOPDF_VERSION=0.12.1.4-2
 ENV DB_FILTER=.* \
     DEPTH_DEFAULT=1 \
     DEPTH_MERGE=100 \
@@ -34,31 +33,26 @@ ENV DB_FILTER=.* \
     WDB_WEB_PORT=1984 \
     WDB_WEB_SERVER=localhost
 
-# Debian stretch was moved to archive (and stretch-updates does not exist in archive)
-RUN sed -i 's,http://deb.debian.org,http://archive.debian.org,g;s,http://security.debian.org,http://archive.debian.org,g;s,\(.*stretch-updates\),#\1,' /etc/apt/sources.list
-
 # Other requirements and recommendations to run Odoo
 # See https://github.com/$ODOO_SOURCE/blob/$ODOO_VERSION/debian/control
-RUN apt-get update  \
+RUN apt-get update \
     && apt-get -yqq  upgrade \
-    && apt-get install -yqq  --no-install-recommends \
-        python ruby-compass \
-        fontconfig libfreetype6 libxml2 libxslt1.1 libjpeg62-turbo zlib1g \
-        fonts-liberation \
-        libfreetype6 liblcms2-2 libtiff5 tk tcl libpq5 \
-        libldap-2.4-2 libsasl2-2 libx11-6 libxext6 libxrender1 \
-        locales-all zlibc \
-        bzip2 ca-certificates curl gettext git nano \
-        openssh-client telnet xz-utils gnupg2 \
-    && curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python /dev/stdin \
-    && curl -sL https://deb.nodesource.com/setup_8.x | bash - \
-    && apt-get install -yqq  nodejs \
-    && curl -SLo fonts-liberation2.deb http://ftp.debian.org/debian/pool/main/f/fonts-liberation2/fonts-liberation2_2.00.1-3_all.deb \
-    && dpkg --install fonts-liberation2.deb \
-    && curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}.stretch_amd64.deb \
-    && echo "${WKHTMLTOPDF_CHECKSUM}  wkhtmltox.deb" | sha256sum -c - \
+    && apt install apt-transport-https gnupg2 curl python rubygems libfreetype6 fontconfig libxslt1.1 libjpeg62-turbo zlib1g fonts-liberation libfreetype6 liblcms2-2 libtiff5 tk tcl libpq5 libldap-2.4-2 libsasl2-2 libx11-6 libxext6 libxrender1 locales-all zlibc bzip2 ca-certificates  gettext git nano openssh-client telnet xz-utils ruby-dev build-essential -yqqq \
+    && curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}.buster_amd64.deb \
     && (dpkg --install wkhtmltox.deb || true) \
-    && apt-get install -yqq  --no-install-recommends --fix-broken \
+    && apt-get -f install -yqq
+
+# Special case to get latest PostgreSQL client in 250-postgres-client
+RUN echo 'deb https://apt.postgresql.org/pub/repos/apt buster-pgdg main' >> /etc/apt/sources.list.d/postgresql.list \
+&& curl -SL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
+&& apt update
+
+RUN curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python /dev/stdin \
+    && curl -sL https://deb.nodesource.com/setup_8.x | bash - \
+    && echo "Package: *\nPin: origin deb.nodesource.com\nPin-Priority: 1002\n" >> /etc/apt/preferences.d/nodejs \
+    && apt-get install -yqq  nodejs \
+    && curl -SLo fonts-liberation2.deb https://ftp.debian.org/debian/pool/main/f/fonts-liberation2/fonts-liberation2_2.00.5-1_all.deb \
+    && dpkg --install fonts-liberation2.deb \
     && rm fonts-liberation2.deb wkhtmltox.deb \
     && wkhtmltopdf --version \
     && curl --silent -L --output geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb https://github.com/maxmind/geoipupdate/releases/download/v${GEOIP_UPDATER_VERSION}/geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb \
@@ -66,13 +60,8 @@ RUN apt-get update  \
     && rm geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb \
     && rm -Rf /var/lib/apt/lists/*
 
-# Special case to get latest PostgreSQL client in 250-postgres-client
-RUN echo 'deb http://apt.postgresql.org/pub/repos/apt/ stretch-pgdg main' >> /etc/apt/sources.list.d/postgresql.list \
-    && curl -SL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
-
 # Special case to get latest Less and PhantomJS
-RUN ln -s /usr/bin/nodejs /usr/local/bin/node \
-    && npm install -g less@2 less-plugin-clean-css@1 \
+RUN npm install -g less@2 less-plugin-clean-css@1 \
     && rm -Rf ~/.npm /tmp/*
 
 # Special case to get bootstrap-sass, required by Odoo for Sass assets
@@ -132,17 +121,25 @@ RUN virtualenv --system-site-packages /qa/venv \
 ARG ODOO_SOURCE=OCA/OCB
 ARG ODOO_VERSION=8.0
 ENV ODOO_VERSION="$ODOO_VERSION"
+RUN debs="libldap2-dev libsasl2-dev zlib1g-dev libjpeg-dev libssl-dev libxslt-dev libxml2-dev python-dev" \
+    && apt-get update \
+    && apt-get install -yqq --no-install-recommends $debs \
+    && pip install \
+        -r https://raw.githubusercontent.com/$ODOO_SOURCE/$ODOO_VERSION/requirements.txt \
+    && (python -m compileall -q /usr/local/lib/python2.7/ || true) \
+    && apt-get purge -yqq $debs \
+    && rm -Rf /var/lib/apt/lists/* /tmp/*
 
 # Metadata
 ARG VCS_REF
 ARG BUILD_DATE
 ARG VERSION
 LABEL org.label-schema.schema-version="$VERSION" \
-      org.label-schema.vendor=Tecnativa \
+      org.label-schema.vendor=Comunitea \
       org.label-schema.license=Apache-2.0 \
       org.label-schema.build-date="$BUILD_DATE" \
       org.label-schema.vcs-ref="$VCS_REF" \
-      org.label-schema.vcs-url="https://github.com/Tecnativa/doodba"
+      org.label-schema.vcs-url="https://github.com/Comunitea/doodba"
 
 # Onbuild version, with all the magic
 FROM base AS onbuild
