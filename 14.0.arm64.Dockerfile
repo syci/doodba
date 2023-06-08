@@ -1,10 +1,10 @@
-FROM debian:buster AS base
+FROM --platform=arm64 python:3.8-buster AS base
 
 EXPOSE 8069 8072
 
 ARG GEOIP_UPDATER_VERSION=4.9.0
-ARG MQT=https://github.com/OCA/maintainer-quality-tools.git
 ARG WKHTMLTOPDF_VERSION=0.12.6-1
+ARG WKHTMLTOPDF_CHECKSUM='d2929792fdc95fa66d637ecbf9cd0dce874f53d783d5ddcf947a86c007c81c95'
 ENV DB_FILTER=.* \
     DEPTH_DEFAULT=1 \
     DEPTH_MERGE=100 \
@@ -19,13 +19,11 @@ ENV DB_FILTER=.* \
     OPENERP_SERVER=/opt/odoo/auto/odoo.conf \
     PATH="/home/odoo/.local/bin:$PATH" \
     PIP_NO_CACHE_DIR=0 \
-    PTVSD_ARGS="--host 0.0.0.0 --port 6899 --wait --multiprocess" \
-    PTVSD_ENABLE=0 \
     DEBUGPY_ARGS="--listen 0.0.0.0:6899 --wait-for-client" \
     DEBUGPY_ENABLE=0 \
     PUDB_RDB_HOST=0.0.0.0 \
     PUDB_RDB_PORT=6899 \
-    PYTHONOPTIMIZE=1 \
+    PYTHONOPTIMIZE="" \
     UNACCENT=true \
     WAIT_DB=true \
     WDB_NO_BROWSER_AUTO_OPEN=True \
@@ -33,60 +31,41 @@ ENV DB_FILTER=.* \
     WDB_WEB_PORT=1984 \
     WDB_WEB_SERVER=localhost
 
-# Other requirements and recommendations to run Odoo
+# Other requirements and recommendations
 # See https://github.com/$ODOO_SOURCE/blob/$ODOO_VERSION/debian/control
-RUN apt-get update \
-    && apt-get -yqq  upgrade \
-    && apt install python-greenlet python-gevent apt-transport-https gnupg2 curl python rubygems libfreetype6 fontconfig libxslt1.1 libjpeg62-turbo zlib1g fonts-liberation libfreetype6 liblcms2-2 libtiff5 tk tcl libpq5 libldap-2.4-2 libsasl2-2 libx11-6 libxext6 libxrender1 locales-all zlibc bzip2 ca-certificates  gettext git nano openssh-client telnet xz-utils ruby-dev build-essential -yqqq \
+RUN apt-get -qq update \
+    && apt-get install -yqq --no-install-recommends \
+        curl \
     && curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}.buster_arm64.deb \
-    && (dpkg --install wkhtmltox.deb || true) \
-    && apt-get -f install -yqq
-
-# Special case to get latest PostgreSQL client in 250-postgres-client
-RUN echo 'deb https://apt.postgresql.org/pub/repos/apt buster-pgdg main' >> /etc/apt/sources.list.d/postgresql.list \
-&& curl -SL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
-&& apt update
-
-RUN curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python /dev/stdin \
-    && curl -sL https://deb.nodesource.com/setup_8.x | bash - \
-    && echo "Package: *\nPin: origin deb.nodesource.com\nPin-Priority: 1002\n" >> /etc/apt/preferences.d/nodejs \
-    && apt-get install -yqq  nodejs \
-    && curl -SLo fonts-liberation2.deb https://ftp.debian.org/debian/pool/main/f/fonts-liberation2/fonts-liberation2_2.00.5-1_all.deb \
-    && dpkg --install fonts-liberation2.deb \
-    && rm fonts-liberation2.deb wkhtmltox.deb \
-    && wkhtmltopdf --version \
+    && echo "${WKHTMLTOPDF_CHECKSUM} wkhtmltox.deb" | sha256sum -c - \
+    && apt-get install -yqq --no-install-recommends \
+        ./wkhtmltox.deb \
+        chromium \
+        ffmpeg \
+        fonts-liberation2 \
+        gettext \
+        git \
+        gnupg2 \
+        locales-all \
+        nano \
+        npm \
+        openssh-client \
+        telnet \
+        vim \
+        zlibc \
+    && echo 'deb http://apt.postgresql.org/pub/repos/apt/ buster-pgdg main' >> /etc/apt/sources.list.d/postgresql.list \
+    && curl -SL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
+    && apt-get update \
     && curl --silent -L --output geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb https://github.com/maxmind/geoipupdate/releases/download/v${GEOIP_UPDATER_VERSION}/geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb \
     && dpkg -i geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb \
     && rm geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb \
-    && rm -Rf /var/lib/apt/lists/*
-
-# Special case to get latest Less and PhantomJS
-RUN npm install -g less@2 less-plugin-clean-css@1 \
-    && rm -Rf ~/.npm /tmp/*
-
-# Special case to get bootstrap-sass, required by Odoo for Sass assets
-RUN gem install --no-rdoc --no-ri --no-update-sources autoprefixer-rails --version '<9.8.6' \
-    && gem install --no-rdoc --no-ri --no-update-sources bootstrap-sass --version '<3.4' \
-    && rm -Rf ~/.gem /var/lib/gems/*/cache/
-
-# Other facilities
-WORKDIR /opt/odoo
-RUN pip install \
-        click-odoo-contrib \
-        git-aggregator \
-        plumbum \
-        ptvsd \
-        debugpy \
-        pudb \
-        virtualenv \
-        wdb \
-        simplejson \
-        geoip2 \
+    && apt-get autopurge -yqq \
+    && rm -Rf wkhtmltox.deb /var/lib/apt/lists/* /tmp/* \
     && sync
-COPY bin-deprecated/* bin/* /usr/local/bin/
-COPY lib/doodbalib /usr/local/lib/python2.7/dist-packages/doodbalib
-RUN ln -s /usr/local/lib/python2.7/dist-packages/doodbalib \
-    /usr/local/lib/python2.7/dist-packages/odoobaselib
+
+WORKDIR /opt/odoo
+COPY bin/* /usr/local/bin/
+COPY lib/doodbalib /usr/local/lib/python3.8/site-packages/doodbalib
 COPY build.d common/build.d
 COPY conf.d common/conf.d
 COPY entrypoint.d common/entrypoint.d
@@ -94,7 +73,8 @@ RUN mkdir -p auto/addons auto/geoip custom/src/private \
     && ln /usr/local/bin/direxec common/entrypoint \
     && ln /usr/local/bin/direxec common/build \
     && chmod -R a+rx common/entrypoint* common/build* /usr/local/bin \
-    && chmod -R a+rX /usr/local/lib/python2.7/dist-packages/doodbalib \
+    && chmod -R a+rX /usr/local/lib/python3.8/site-packages/doodbalib \
+    && cp -a /etc/GeoIP.conf /etc/GeoIP.conf.orig \
     && mv /etc/GeoIP.conf /opt/odoo/auto/geoip/GeoIP.conf \
     && ln -s /opt/odoo/auto/geoip/GeoIP.conf /etc/GeoIP.conf \
     && sed -i 's/.*DatabaseDirectory .*$/DatabaseDirectory \/opt\/odoo\/auto\/geoip\//g' /opt/odoo/auto/geoip/GeoIP.conf \
@@ -102,32 +82,68 @@ RUN mkdir -p auto/addons auto/geoip custom/src/private \
 
 # Doodba-QA dependencies in a separate virtualenv
 COPY qa /qa
-RUN virtualenv --system-site-packages /qa/venv \
+RUN python -m venv --system-site-packages /qa/venv \
     && . /qa/venv/bin/activate \
-    && pip install --no-cache-dir \
+    && pip install \
         click \
         coverage \
-        flake8 \
-        #pylint-odoo \
         six \
-    && npm install --loglevel error --prefix /qa 'eslint@<6' \
     && deactivate \
-    && mkdir -p /qa/artifacts \
-    && git clone --depth 1 $MQT /qa/mqt
+    && mkdir -p /qa/artifacts
 
-# Execute installation script by Odoo version
-# This is at the end to benefit from cache at build time
-# https://docs.docker.com/engine/reference/builder/#/impact-on-build-caching
 ARG ODOO_SOURCE=OCA/OCB
-ARG ODOO_VERSION=8.0
+ARG ODOO_VERSION=14.0
 ENV ODOO_VERSION="$ODOO_VERSION"
-RUN debs="libldap2-dev libpq-dev libsasl2-dev zlib1g-dev libjpeg-dev libssl-dev libxslt-dev libxml2-dev python-dev" \
+
+# Install Odoo hard & soft dependencies, and Doodba utilities
+RUN build_deps=" \
+        build-essential \
+        libfreetype6-dev \
+        libfribidi-dev \
+        libghc-zlib-dev \
+        libharfbuzz-dev \
+        libjpeg-dev \
+        liblcms2-dev \
+        libldap2-dev \
+        libopenjp2-7-dev \
+        libpq-dev \
+        libsasl2-dev \
+        libtiff5-dev \
+        libwebp-dev \
+        libxml2-dev \
+        libxslt-dev \
+        libssl-dev \
+        tcl-dev \
+        tk-dev \
+        zlib1g-dev \
+    " \
     && apt-get update \
-    && apt-get install -yqq --no-install-recommends $debs \
+    && apt-get install -yqq --no-install-recommends $build_deps \
+    && curl -SLo requirements.txt https://raw.githubusercontent.com/$ODOO_SOURCE/$ODOO_VERSION/requirements.txt \
+    && sed -i 's/gevent==20.9.0/gevent==20.12.0/g' requirements.txt \
     && pip install \
-        -r https://raw.githubusercontent.com/syci/doodba/master/requirements8.txt \
-    && (python -m compileall -q /usr/local/lib/python2.7/ || true) \
-    && apt-get purge -yqq $debs \
+        -r ./requirements.txt \
+        'websocket-client~=0.56' \
+        astor \
+        # Install fix from https://github.com/acsone/click-odoo-contrib/pull/93
+        git+https://github.com/Tecnativa/click-odoo-contrib.git@fix-active-modules-hashing \
+        debugpy \
+        pydevd-odoo \
+        geoip2 \
+        "git-aggregator<3.0.0" \
+        inotify \
+        pdfminer.six \
+        pg_activity \
+        phonenumbers \
+        plumbum \
+        pudb \
+        pyOpenSSL \
+        python-magic \
+        watchdog \
+        wdb \
+    && (python3 -m compileall -q /usr/local/lib/python3.8/ || true) \
+    && apt-get purge -yqq $build_deps \
+    && apt-get autopurge -yqq \
     && rm -Rf /var/lib/apt/lists/* /tmp/*
 
 # Metadata
@@ -135,17 +151,28 @@ ARG VCS_REF
 ARG BUILD_DATE
 ARG VERSION
 LABEL org.label-schema.schema-version="$VERSION" \
-      org.label-schema.vendor=Comunitea \
+      org.label-schema.vendor=Tecnativa \
       org.label-schema.license=Apache-2.0 \
       org.label-schema.build-date="$BUILD_DATE" \
       org.label-schema.vcs-ref="$VCS_REF" \
-      org.label-schema.vcs-url="https://github.com/Comunitea/doodba"
+      org.label-schema.vcs-url="https://github.com/Tecnativa/doodba"
 
 # Onbuild version, with all the magic
 FROM base AS onbuild
 
+# Enable setting custom uids for odoo user during build of scaffolds
+ONBUILD ARG UID=1000
+ONBUILD ARG GID=1000
+
+# Enable Odoo user and filestore
+ONBUILD RUN groupadd -g $GID odoo -o \
+    && useradd -l -md /home/odoo -s /bin/false -u $UID -g $GID odoo \
+    && mkdir -p /var/lib/odoo \
+    && chown -R odoo:odoo /var/lib/odoo /qa/artifacts \
+    && chmod a=rwX /qa/artifacts \
+    && sync
+
 # Subimage triggers
-ONBUILD USER root
 ONBUILD ENTRYPOINT ["/opt/odoo/common/entrypoint"]
 ONBUILD CMD ["/usr/local/bin/odoo"]
 ONBUILD ARG AGGREGATE=true
@@ -173,6 +200,7 @@ ONBUILD ARG PGPASSWORD=odoopassword
 ONBUILD ARG PGHOST=db
 ONBUILD ARG PGPORT=5432
 ONBUILD ARG PGDATABASE=prod
+
 # Config variables
 ONBUILD ENV ADMIN_PASSWORD="$ADMIN_PASSWORD" \
             DEFAULT_REPO_PATTERN="$DEFAULT_REPO_PATTERN" \
@@ -192,21 +220,9 @@ ONBUILD ENV ADMIN_PASSWORD="$ADMIN_PASSWORD" \
             EMAIL_FROM="$EMAIL_FROM" \
             WITHOUT_DEMO="$WITHOUT_DEMO"
 ONBUILD ARG LOCAL_CUSTOM_DIR=./custom
-ONBUILD COPY $LOCAL_CUSTOM_DIR /opt/odoo/custom
+ONBUILD COPY --chown=root:odoo $LOCAL_CUSTOM_DIR /opt/odoo/custom
 
-# Enable setting custom uids for odoo user during build of scaffolds
-ONBUILD ARG UID=1000
-ONBUILD ARG GID=1000
-
-# Enable Odoo user and filestore
-ONBUILD RUN groupadd -g $GID odoo -o \
-    && useradd -l -md /home/odoo -s /bin/false -u $UID -g $GID odoo \
-    && mkdir -p /var/lib/odoo \
-    && chown -R odoo:odoo /var/lib/odoo /qa/artifacts\
-    && chmod a=rwX /qa/artifacts \
-    && sync
-
-# https://docs.python.org/2.7/library/logging.html#levels
+# https://docs.python.org/3/library/logging.html#levels
 ONBUILD ARG LOG_LEVEL=INFO
 ONBUILD RUN mkdir -p /opt/odoo/custom/ssh \
             && ln -s /opt/odoo/custom/ssh ~root/.ssh \
@@ -216,5 +232,3 @@ ONBUILD ARG DB_VERSION=latest
 ONBUILD RUN /opt/odoo/common/build && sync
 ONBUILD VOLUME ["/var/lib/odoo"]
 ONBUILD USER odoo
-# HACK Special case for Werkzeug
-ONBUILD RUN pip install --user Werkzeug==0.14.1

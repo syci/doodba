@@ -1,4 +1,4 @@
-FROM python:3.5-stretch AS base
+FROM --platform=linux/amd64 python:3.5-stretch AS base
 
 EXPOSE 8069 8072
 
