@@ -1,11 +1,11 @@
-FROM --platform=linux/amd64 python:3.7-stretch AS base
+FROM --platform=linux/amd64 python:3.7-buster AS base
 
 EXPOSE 8069 8072
 
 ARG GEOIP_UPDATER_VERSION=4.9.0
 ARG MQT=https://github.com/OCA/maintainer-quality-tools.git
 ARG WKHTMLTOPDF_VERSION=0.12.6-1
-ARG WKHTMLTOPDF_CHECKSUM='7b6833a8e1899cc172d384674aee42bfdd83932f0e4cda5ec33c0ff298c31ccd'
+ARG WKHTMLTOPDF_CHECKSUM='3e7a93a2ae4a2dd5cccb1b7bcce0eb462c75f05efa314a29499dadfdc5ebc59e'
 ENV DB_FILTER=.* \
     DEPTH_DEFAULT=1 \
     DEPTH_MERGE=100 \
@@ -34,8 +34,8 @@ ENV DB_FILTER=.* \
     WDB_WEB_PORT=1984 \
     WDB_WEB_SERVER=localhost
 
-# Debian stretch was moved to archive (and stretch-updates does not exist in archive)
-RUN sed -i 's,http://deb.debian.org,http://archive.debian.org,g;s,http://security.debian.org,http://archive.debian.org,g;s,\(.*stretch-updates\),#\1,' /etc/apt/sources.list
+# # Debian stretch was moved to archive (and stretch-updates does not exist in archive)
+# RUN sed -i 's,http://deb.debian.org,http://archive.debian.org,g;s,http://security.debian.org,http://archive.debian.org,g;s,\(.*stretch-updates\),#\1,' /etc/apt/sources.list
 
 
 # Other requirements and recommendations to run Odoo
@@ -57,13 +57,14 @@ RUN apt-get -qq update \
         apt-transport-https \
         ca-certificates \
         python3-dev \
-    && echo 'deb https://apt-archive.postgresql.org/pub/repos/apt stretch-pgdg main' >> /etc/apt/sources.list.d/postgresql.list \
+        npm \
+    && echo 'deb https://apt.postgresql.org/pub/repos/apt buster-pgdg main' >> /etc/apt/sources.list.d/postgresql.list \
     && curl -SL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
     && curl https://bootstrap.pypa.io/get-pip.py | python3 /dev/stdin \
-    && curl -sL https://deb.nodesource.com/setup_8.x | bash - \
+    && curl -sL https://deb.nodesource.com/setup_12.x | bash - \
     && apt-get update \
     && apt-get install -yqq --no-install-recommends nodejs \
-    && curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}.stretch_amd64.deb \
+    && curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}.buster_amd64.deb \
     && echo "${WKHTMLTOPDF_CHECKSUM}  wkhtmltox.deb" | sha256sum -c - \
     && apt-get install -yqq --no-install-recommends ./wkhtmltox.deb \
     && rm wkhtmltox.deb \
