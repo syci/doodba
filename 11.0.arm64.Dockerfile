@@ -78,9 +78,9 @@ RUN ln -s /usr/bin/nodejs /usr/local/bin/node \
     && rm -Rf ~/.npm /tmp/*
 
 # Special case to get bootstrap-sass, required by Odoo for Sass assets
-RUN gem install --no-rdoc --no-ri --no-update-sources autoprefixer-rails --version '<9.8.6' \
-    && gem install --no-rdoc --no-ri --no-update-sources bootstrap-sass --version '<3.4' \
-    && rm -Rf ~/.gem /var/lib/gems/*/cache/
+# RUN gem install --no-rdoc --no-ri --no-update-sources autoprefixer-rails --version '<9.8.6' \
+#     && gem install --no-rdoc --no-ri --no-update-sources bootstrap-sass --version '<3.4' \
+#     && rm -Rf ~/.gem /var/lib/gems/*/cache/
 
 # Other facilities
 WORKDIR /opt/odoo
@@ -141,11 +141,12 @@ RUN python -m venv --system-site-packages /qa/venv \
 ARG ODOO_SOURCE=OCA/OCB
 ARG ODOO_VERSION=11.0
 ENV ODOO_VERSION="$ODOO_VERSION"
-RUN debs="libldap2-dev libsasl2-dev" \
+RUN debs="libldap2-dev libsasl2-dev python3-dev build-essential libev-dev libssl-dev" \
     && apt-get update \
     && apt-get install -yqq --no-install-recommends $debs \
-    && pip install \
-        -r https://raw.githubusercontent.com/$ODOO_SOURCE/$ODOO_VERSION/requirements.txt \
+    && curl -s https://raw.githubusercontent.com/$ODOO_SOURCE/$ODOO_VERSION/requirements.txt | grep -v 'gevent==1.5.0' > filtered_requirements.txt \
+    && pip install -r filtered_requirements.txt \
+    && pip install "gevent>=21.12.0,<22.0.0" \
     && (python3 -m compileall -q /usr/local/lib/python3.7/ || true) \
     && apt-get purge -yqq $debs \
     && rm -Rf /var/lib/apt/lists/* /tmp/*

@@ -37,7 +37,7 @@ ENV DB_FILTER=.* \
 # See https://github.com/$ODOO_SOURCE/blob/$ODOO_VERSION/debian/control
 RUN apt-get update \
     && apt-get -yqq  upgrade \
-    && apt install python-greenlet python-gevent apt-transport-https gnupg2 curl python rubygems libfreetype6 fontconfig libxslt1.1 libjpeg62-turbo zlib1g fonts-liberation libfreetype6 liblcms2-2 libtiff5 tk tcl libpq5 libldap-2.4-2 libsasl2-2 libx11-6 libxext6 libxrender1 locales-all zlibc bzip2 ca-certificates  gettext git nano openssh-client telnet xz-utils ruby-dev build-essential -yqqq \
+    && apt install python-greenlet python-gevent apt-transport-https gnupg2 curl python rubygems libfreetype6 fontconfig libxslt1.1 libjpeg62-turbo zlib1g fonts-liberation libfreetype6 liblcms2-2 libtiff5 tk tcl libpq5 libldap-2.4-2 libsasl2-2 libx11-6 libxext6 libxrender1 locales-all zlibc bzip2 ca-certificates  gettext git nano openssh-client telnet xz-utils ruby-dev build-essential libyaml-dev -yqqq \
     && curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}.buster_arm64.deb \
     && (dpkg --install wkhtmltox.deb || true) \
     && apt-get -f install -yqq
@@ -65,9 +65,10 @@ RUN npm install -g less@2 less-plugin-clean-css@1 \
     && rm -Rf ~/.npm /tmp/*
 
 # Special case to get bootstrap-sass, required by Odoo for Sass assets
-RUN gem install --no-rdoc --no-ri --no-update-sources autoprefixer-rails --version '<9.8.6' \
-    && gem install --no-rdoc --no-ri --no-update-sources bootstrap-sass --version '<3.4' \
-    && rm -Rf ~/.gem /var/lib/gems/*/cache/
+# RUN gem install --no-rdoc --no-ri --no-update-sources autoprefixer-rails --version '<9.8.6' \
+#     && gem install --no-rdoc --no-ri --no-update-sources bootstrap-sass --version '<3.4' \
+#     && rm -Rf ~/.gem /var/lib/gems/*/cache/
+RUN pip install --upgrade "pip<21.0" "setuptools<45" "wheel" "Cython<0.30"
 
 # Other facilities
 WORKDIR /opt/odoo
