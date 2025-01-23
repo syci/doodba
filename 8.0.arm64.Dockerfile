@@ -43,7 +43,7 @@ RUN apt-get update \
     && apt-get -f install -yqq
 
 # Special case to get latest PostgreSQL client in 250-postgres-client
-RUN echo 'deb https://apt.postgresql.org/pub/repos/apt buster-pgdg main' >> /etc/apt/sources.list.d/postgresql.list \
+RUN echo 'deb https://apt-archive.postgresql.org/pub/repos/apt buster-pgdg main' >> /etc/apt/sources.list.d/postgresql.list \
 && curl -SL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
 && apt update
 
