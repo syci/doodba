@@ -1,11 +1,11 @@
-FROM --platform=arm64 python:3.7-stretch AS base
+FROM python:3.7-buster AS base
 
 EXPOSE 8069 8072
 
 ARG GEOIP_UPDATER_VERSION=4.9.0
 ARG MQT=https://github.com/OCA/maintainer-quality-tools.git
 ARG WKHTMLTOPDF_VERSION=0.12.6-1
-ARG WKHTMLTOPDF_CHECKSUM='7b6833a8e1899cc172d384674aee42bfdd83932f0e4cda5ec33c0ff298c31ccd'
+ARG WKHTMLTOPDF_CHECKSUM='d2929792fdc95fa66d637ecbf9cd0dce874f53d783d5ddcf947a86c007c81c95'
 ENV DB_FILTER=.* \
     DEPTH_DEFAULT=1 \
     DEPTH_MERGE=100 \
@@ -34,9 +34,6 @@ ENV DB_FILTER=.* \
     WDB_WEB_PORT=1984 \
     WDB_WEB_SERVER=localhost
 
-# Debian stretch was moved to archive (and stretch-updates does not exist in archive)
-RUN sed -i 's,http://deb.debian.org,http://archive.debian.org,g;s,http://security.debian.org,http://archive.debian.org,g;s,\(.*stretch-updates\),#\1,' /etc/apt/sources.list
-
 # Other requirements and recommendations to run Odoo
 # See https://github.com/$ODOO_SOURCE/blob/$ODOO_VERSION/debian/control
 RUN apt-get -qq update \
@@ -47,7 +44,6 @@ RUN apt-get -qq update \
         gettext \
         gnupg2 \
         locales-all \
-        ruby-compass \
         nano \
         ruby \
         telnet \
@@ -56,21 +52,21 @@ RUN apt-get -qq update \
         apt-transport-https \
         ca-certificates \
         python3-pip \
-        phantomjs \
-    && echo 'deb https://apt-archive.postgresql.org/pub/repos/apt stretch-pgdg main' >> /etc/apt/sources.list.d/postgresql.list \
-    && curl -SL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
-    && curl -sL https://deb.nodesource.com/setup_8.x | bash - \
-    && apt-get update \
-    && apt-get install -yqq --no-install-recommends nodejs \
-    && curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}.stretch_arm64.deb \
-    && echo "${WKHTMLTOPDF_CHECKSUM}  wkhtmltox.deb" | sha256sum -c - \
-    && apt-get install -yqq --no-install-recommends ./wkhtmltox.deb \
-    && rm wkhtmltox.deb \
-    && wkhtmltopdf --version \
-    && curl --silent -L --output geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb https://github.com/maxmind/geoipupdate/releases/download/v${GEOIP_UPDATER_VERSION}/geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb \
-    && dpkg -i geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb \
-    && rm geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb \
-    && rm -Rf /var/lib/apt/lists/* /tmp/*
+        phantomjs 
+        
+    RUN echo 'deb https://apt-archive.postgresql.org/pub/repos/apt buster-pgdg main' >> /etc/apt/sources.list.d/postgresql.list 
+    RUN curl -SL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - 
+    RUN apt-get update 
+    RUN apt-get install -yqq --no-install-recommends nodejs npm
+    RUN curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}.buster_arm64.deb 
+    RUN echo "${WKHTMLTOPDF_CHECKSUM}  wkhtmltox.deb" | sha256sum -c - 
+    RUN apt-get install -yqq --no-install-recommends ./wkhtmltox.deb 
+    RUN rm wkhtmltox.deb 
+    RUN wkhtmltopdf --version 
+    RUN curl --silent -L --output geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb https://github.com/maxmind/geoipupdate/releases/download/v${GEOIP_UPDATER_VERSION}/geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb 
+    RUN dpkg -i geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb 
+    RUN rm geoipupdate_${GEOIP_UPDATER_VERSION}_linux_arm64.deb 
+    RUN rm -Rf /var/lib/apt/lists/* /tmp/*
 
 # Special case to get latest Less and PhantomJS
 RUN ln -s /usr/bin/nodejs /usr/local/bin/node \
