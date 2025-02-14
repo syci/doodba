@@ -37,7 +37,7 @@ ENV DB_FILTER=.* \
 # See https://github.com/$ODOO_SOURCE/blob/$ODOO_VERSION/debian/control
 RUN apt-get update \
     && apt-get -yqq  upgrade \
-    && apt install python-greenlet python-gevent apt-transport-https gnupg2 curl python rubygems libfreetype6 fontconfig libxslt1.1 libjpeg62-turbo zlib1g fonts-liberation libfreetype6 liblcms2-2 libtiff5 tk tcl libpq5 libldap-2.4-2 libsasl2-2 libx11-6 libxext6 libxrender1 locales-all zlibc bzip2 ca-certificates  gettext git nano openssh-client telnet xz-utils ruby-dev build-essential libyaml-dev -yqqq \
+    && apt install apt-transport-https gnupg2 curl python rubygems libfreetype6 fontconfig libxslt1.1 libjpeg62-turbo zlib1g fonts-liberation libfreetype6 liblcms2-2 libtiff5 tk tcl libpq5 libldap-2.4-2 libsasl2-2 libx11-6 libxext6 libxrender1 locales-all zlibc bzip2 ca-certificates  gettext git nano openssh-client telnet xz-utils ruby-dev build-essential libyaml-dev -yqqq \
     && curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}.buster_arm64.deb \
     && (dpkg --install wkhtmltox.deb || true) \
     && apt-get -f install -yqq
@@ -122,14 +122,17 @@ RUN virtualenv --system-site-packages /qa/venv \
 ARG ODOO_SOURCE=OCA/OCB
 ARG ODOO_VERSION=8.0
 ENV ODOO_VERSION="$ODOO_VERSION"
-RUN debs="libldap2-dev libpq-dev libsasl2-dev zlib1g-dev libjpeg-dev libssl-dev libxslt-dev libxml2-dev python-dev" \
+RUN debs="wget libldap2-dev libev-dev libpq-dev libsasl2-dev zlib1g-dev libjpeg-dev libssl-dev libxslt-dev libxml2-dev python-dev" \
     && apt-get update \
     && apt-get install -yqq --no-install-recommends $debs \
-    && pip install \
-        -r https://raw.githubusercontent.com/syci/doodba/master/requirements8.txt \
+    && wget -q -O /tmp/requirements.txt https://raw.githubusercontent.com/OCA/OCB/refs/heads/8.0/requirements.txt \
+    && sed -i 's/greenlet==[0-9.]*$/greenlet==0.4.17/g' /tmp/requirements.txt \
+    && sed -i 's/gevent==[0-9.]*$/gevent==1.1.0/g' /tmp/requirements.txt \
+    && pip install -r /tmp/requirements.txt \
     && (python -m compileall -q /usr/local/lib/python2.7/ || true) \
     && apt-get purge -yqq $debs \
     && rm -Rf /var/lib/apt/lists/* /tmp/*
+
 
 # Metadata
 ARG VCS_REF
@@ -217,5 +220,5 @@ ONBUILD ARG DB_VERSION=latest
 ONBUILD RUN /opt/odoo/common/build && sync
 ONBUILD VOLUME ["/var/lib/odoo"]
 ONBUILD USER odoo
-# HACK Special case for Werkzeug
-ONBUILD RUN pip install --user Werkzeug==0.14.1
+# # HACK Special case for Werkzeug
+# ONBUILD RUN pip install --user Werkzeug==0.9.6
