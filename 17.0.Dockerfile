@@ -144,14 +144,14 @@ RUN build_deps=" \
     # disable gevent version recommendation from odoo and use 22.10.2 used in debian bookworm as python3-gevent
     && sed -i -E "s/(gevent==)21\.8\.0( ; sys_platform != 'win32' and python_version == '3.10')/\122.10.2\2/;s/(greenlet==)1.1.2( ; sys_platform != 'win32' and python_version == '3.10')/\12.0.2\2/" requirements.txt \
     # need to upgrade setuptools, since the fixes for CVE-2024-6345 rolled out in base images we get errors "error: invalid command 'bdist_wheel'"
-    && pip install --upgrade setuptools \
+    # We need setuptools lower than 82 as odoo uses pkg_resources and it was removed in 82.0.0
+    && pip install --upgrade "setuptools<82" \
     && pip install -r requirements.txt \
         'websocket-client~=0.56' \
         astor \
         click-odoo-contrib \
         debugpy \
         pydevd-odoo \
-        git+https://github.com/mailgun/flanker.git@v0.9.15#egg=flanker[validator] \
         geoip2 \
         "git-aggregator==4.0" \
         inotify \
@@ -165,9 +165,6 @@ RUN build_deps=" \
         watchdog \
         wdb \
     && (python3 -m compileall -q /usr/local/lib/python3.10/ || true) \
-    # generate flanker cached tables during install when /usr/local/lib/ is still intended to be written to
-    # https://github.com/Tecnativa/doodba/issues/486
-    && python3 -c 'from flanker.addresslib import address' >/dev/null 2>&1 \
     && apt-get purge -yqq $build_deps \
     && apt-get autopurge -yqq \
     && rm -Rf /var/lib/apt/lists/* /tmp/*

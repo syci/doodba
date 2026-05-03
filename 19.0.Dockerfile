@@ -1,4 +1,4 @@
-FROM python:3.10-slim-bookworm AS base
+FROM python:3.12-slim-bookworm AS base
 
 EXPOSE 8069 8072
 
@@ -12,7 +12,6 @@ ARG LAST_SYSTEM_UID=499
 ARG LAST_SYSTEM_GID=499
 ARG FIRST_UID=500
 ARG FIRST_GID=500
-
 ENV DB_FILTER=.* \
     DEPTH_DEFAULT=1 \
     DEPTH_MERGE=100 \
@@ -24,7 +23,7 @@ ENV DB_FILTER=.* \
     LC_ALL=C.UTF-8 \
     LIST_DB=false \
     NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules \
-    OPENERP_SERVER=/opt/odoo/auto/odoo.conf \
+    ODOO_RC=/opt/odoo/auto/odoo.conf \
     PATH="/home/odoo/.local/bin:$PATH" \
     PIP_NO_CACHE_DIR=0 \
     DEBUGPY_ARGS="--listen 0.0.0.0:6899 --wait-for-client" \
@@ -39,15 +38,15 @@ ENV DB_FILTER=.* \
     WDB_WEB_PORT=1984 \
     WDB_WEB_SERVER=localhost
 
-
 # Other requirements and recommendations
 # See https://github.com/$ODOO_SOURCE/blob/$ODOO_VERSION/debian/control
 RUN echo "LAST_SYSTEM_UID=$LAST_SYSTEM_UID\nLAST_SYSTEM_GID=$LAST_SYSTEM_GID\nFIRST_UID=$FIRST_UID\nFIRST_GID=$FIRST_GID" >> /etc/adduser.conf \
-    && echo "SYS_UID_MAX $LAST_SYSTEM_UID\nSYS_GID_MAX $LAST_SYSTEM_GID" >> /etc/login.defs \
-    && sed -i -E "s/^UID_MIN\s+[0-9]+.*/UID_MIN $FIRST_UID/;s/^GID_MIN\s+[0-9]+.*/GID_MIN $FIRST_GID/" /etc/login.defs \
+    && echo "SYS_UID_MAX   $LAST_SYSTEM_UID\nSYS_GID_MAX   $LAST_SYSTEM_GID" >> /etc/login.defs \
+    && sed -i -E "s/^UID_MIN\s+[0-9]+.*/UID_MIN   $FIRST_UID/;s/^GID_MIN\s+[0-9]+.*/GID_MIN   $FIRST_GID/" /etc/login.defs \
     && useradd --system -u $LAST_SYSTEM_UID -s /usr/sbin/nologin -d / systemd-network \
     && apt-get -qq update \
-    && apt-get install -yqq --no-install-recommends curl \
+    && apt-get install -yqq --no-install-recommends \
+        curl \
     && if [ "$TARGETARCH" = "arm64" ]; then \
         WKHTMLTOPDF_CHECKSUM=$WKHTMLTOPDF_ARM64_CHECKSUM; \
     elif [ "$TARGETARCH" = "amd64" ]; then \
@@ -87,17 +86,17 @@ RUN echo "LAST_SYSTEM_UID=$LAST_SYSTEM_UID\nLAST_SYSTEM_GID=$LAST_SYSTEM_GID\nFI
 
 WORKDIR /opt/odoo
 COPY bin/* /usr/local/bin/
-COPY lib/doodbalib /usr/local/lib/python3.10/site-packages/doodbalib
+COPY lib/doodbalib /usr/local/lib/python3.12/site-packages/doodbalib
 COPY build.d common/build.d
 COPY conf.d common/conf.d
 COPY entrypoint.d common/entrypoint.d
-RUN rm -f /opt/odoo/common/conf.d/60-geoip-ge17.conf \
-    && mv /opt/odoo/common/conf.d/60-geoip-lt17.conf /opt/odoo/common/conf.d/60-geoip.conf
+RUN rm -f /opt/odoo/common/conf.d/60-geoip-lt17.conf \
+    && mv /opt/odoo/common/conf.d/60-geoip-ge17.conf /opt/odoo/common/conf.d/60-geoip.conf
 RUN mkdir -p auto/addons auto/geoip custom/src/private \
     && ln /usr/local/bin/direxec common/entrypoint \
     && ln /usr/local/bin/direxec common/build \
     && chmod -R a+rx common/entrypoint* common/build* /usr/local/bin \
-    && chmod -R a+rX /usr/local/lib/python3.10/site-packages/doodbalib \
+    && chmod -R a+rX /usr/local/lib/python3.12/site-packages/doodbalib \
     && cp -a /etc/GeoIP.conf /etc/GeoIP.conf.orig \
     && mv /etc/GeoIP.conf /opt/odoo/auto/geoip/GeoIP.conf \
     && ln -s /opt/odoo/auto/geoip/GeoIP.conf /etc/GeoIP.conf \
@@ -115,7 +114,7 @@ RUN python -m venv --system-site-packages /qa/venv \
     && mkdir -p /qa/artifacts
 
 ARG ODOO_SOURCE=OCA/OCB
-ARG ODOO_VERSION=16.0
+ARG ODOO_VERSION=19.0
 ENV ODOO_VERSION="$ODOO_VERSION"
 
 # Install Odoo hard & soft dependencies, and Doodba utilities
@@ -138,14 +137,13 @@ RUN build_deps=" \
         tcl-dev \
         tk-dev \
         zlib1g-dev \
+        gcc \
+        libcairo2-dev \
     " \
     && apt-get update \
     && apt-get install -yqq --no-install-recommends $build_deps \
     && curl -o requirements.txt https://raw.githubusercontent.com/$ODOO_SOURCE/$ODOO_VERSION/requirements.txt \
-    # disable gevent version recommendation from odoo and use 22.10.2 used in debian bookworm as python3-gevent
-    && sed -i -E "s/(gevent==)21\.8\.0( ; sys_platform != 'win32' and python_version > '3.9' and python_version <= '3.10')/\122.10.2\2/;s/(greenlet==)1.1.2( ; sys_platform != 'win32' and python_version  > '3.9' and python_version <= '3.10')/\12.0.2\2/" requirements.txt \
     # need to upgrade setuptools, since the fixes for CVE-2024-6345 rolled out in base images we get errors "error: invalid command 'bdist_wheel'"
-    # We need setuptools lower than 82 as odoo uses pkg_resources and it was removed in 82.0.0
     && pip install --upgrade "setuptools<82" \
     && pip install -r requirements.txt \
         'websocket-client~=0.56' \
@@ -165,7 +163,9 @@ RUN build_deps=" \
         python-magic \
         watchdog \
         wdb \
-    && (python3 -m compileall -q /usr/local/lib/python3.10/ || true) \
+        rlPyCairo \
+        pycairo \
+    && (python3 -m compileall -q /usr/local/lib/python3.12/ || true) \
     && apt-get purge -yqq $build_deps \
     && apt-get autopurge -yqq \
     && rm -Rf /var/lib/apt/lists/* /tmp/*
