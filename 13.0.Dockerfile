@@ -1,7 +1,10 @@
+FROM scratch AS ctx
+COPY system_files /
 FROM python:3.6-slim-buster AS base
-
+ARG ODOO_VERSION=13.0
+ENV ODOO_VERSION="$ODOO_VERSION"
 EXPOSE 8069 8072
-
+ARG TARGETARCH
 ARG GEOIP_UPDATER_VERSION=4.1.5
 ARG MQT=https://github.com/OCA/maintainer-quality-tools.git
 ARG WKHTMLTOPDF_VERSION=0.12.5
@@ -19,7 +22,6 @@ ENV DB_FILTER=.* \
     NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules \
     OPENERP_SERVER=/opt/odoo/auto/odoo.conf \
     PATH="/home/odoo/.local/bin:$PATH" \
-    PIP_NO_CACHE_DIR=0 \
     PTVSD_ARGS="--host 0.0.0.0 --port 6899 --wait --multiprocess" \
     PTVSD_ENABLE=0 \
     DEBUGPY_ARGS="--listen 0.0.0.0:6899 --wait-for-client" \
@@ -35,16 +37,20 @@ ENV DB_FILTER=.* \
     WDB_WEB_SERVER=localhost
 
 # Debian buster was moved to archive
-RUN sed -i 's,http://deb.debian.org,http://archive.debian.org,g;s,http://security.debian.org,http://archive.debian.org,g' /etc/apt/sources.list
+COPY legacy/apt/buster.list /etc/apt/sources.list
 # Other requirements and recommendations
 # See https://github.com/$ODOO_SOURCE/blob/$ODOO_VERSION/debian/control
-RUN apt-get -qq update \
+RUN --mount=target=/var/lib/apt/lists,type=cache,id=apt-lists-${TARGETARCH}-${ODOO_VERSION},sharing=locked \
+    --mount=target=/var/cache/apt,type=cache,id=apt-${TARGETARCH}-${ODOO_VERSION},sharing=locked \
+    --mount=target=/tmp,type=tmpfs \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+    && apt-get -qq update \
     && apt-get install -yqq --no-install-recommends \
         curl \
-    && curl -SLo wkhtmltox.deb https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}-1.buster_amd64.deb \
-    && echo "${WKHTMLTOPDF_CHECKSUM} wkhtmltox.deb" | sha256sum -c - \
+    && curl -SLo /tmp/wkhtmltox.deb https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}-1.buster_amd64.deb \
+    && echo "${WKHTMLTOPDF_CHECKSUM} /tmp/wkhtmltox.deb" | sha256sum -c - \
     && apt-get install -yqq --no-install-recommends \
-        ./wkhtmltox.deb \
+        /tmp/wkhtmltox.deb \
         chromium \
         ffmpeg \
         fonts-liberation2 \
@@ -62,26 +68,22 @@ RUN apt-get -qq update \
     && curl -SL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
     && apt-get update \
     && apt-get install -yqq --no-install-recommends \
-    && curl --silent -L --output geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb https://github.com/maxmind/geoipupdate/releases/download/v${GEOIP_UPDATER_VERSION}/geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb \
-    && dpkg -i geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb \
-    && rm geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb \
+    && curl --silent -L --output /tmp/geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb https://github.com/maxmind/geoipupdate/releases/download/v${GEOIP_UPDATER_VERSION}/geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb \
+    && dpkg -i /tmp/geoipupdate_${GEOIP_UPDATER_VERSION}_linux_amd64.deb \
     && apt-get autopurge -yqq \
-    && rm -Rf wkhtmltox.deb /var/lib/apt/lists/* /tmp/* \
     && sync
 
 WORKDIR /opt/odoo
-COPY bin/* /usr/local/bin/
-COPY lib/doodbalib /usr/local/lib/python3.6/site-packages/doodbalib
-COPY build.d common/build.d
-COPY conf.d common/conf.d
-COPY entrypoint.d common/entrypoint.d
+COPY --from=ctx / /
 RUN rm -f /opt/odoo/common/conf.d/60-geoip-ge17.conf \
-    && mv /opt/odoo/common/conf.d/60-geoip-lt17.conf /opt/odoo/common/conf.d/60-geoip.conf
-RUN mkdir -p auto/addons auto/geoip custom/src/private \
+    && mv /opt/odoo/common/conf.d/60-geoip-lt17.conf /opt/odoo/common/conf.d/60-geoip.conf \
+    && rm -f /opt/odoo/common/conf.d/70-database-replica-ge18.conf \
+    && mkdir -p auto/addons auto/geoip custom/src/private \
     && ln /usr/local/bin/direxec common/entrypoint \
     && ln /usr/local/bin/direxec common/build \
     && chmod -R a+rx common/entrypoint* common/build* /usr/local/bin \
-    && chmod -R a+rX /usr/local/lib/python3.6/site-packages/doodbalib \
+    && mv /var/lib/doodba/doodbalib /usr/local/lib/python${PYTHON_VERSION%.*}/site-packages/doodbalib \
+    && chmod -R a+rX /usr/local/lib/python${PYTHON_VERSION%.*}/site-packages/doodbalib \
     && cp -a /etc/GeoIP.conf /etc/GeoIP.conf.orig \
     && mv /etc/GeoIP.conf /opt/odoo/auto/geoip/GeoIP.conf \
     && ln -s /opt/odoo/auto/geoip/GeoIP.conf /etc/GeoIP.conf \
@@ -89,8 +91,8 @@ RUN mkdir -p auto/addons auto/geoip custom/src/private \
     && sync
 
 # Doodba-QA dependencies in a separate virtualenv
-COPY qa /qa
-RUN python -m venv --system-site-packages /qa/venv \
+RUN --mount=target=/root/.cache/pip,type=cache,id=pip-cache \
+    python -m venv --system-site-packages /qa/venv \
     && . /qa/venv/bin/activate \
     && pip install \
         click \
@@ -101,11 +103,13 @@ RUN python -m venv --system-site-packages /qa/venv \
     && git clone --depth 1 $MQT /qa/mqt
 
 ARG ODOO_SOURCE=OCA/OCB
-ARG ODOO_VERSION=13.0
-ENV ODOO_VERSION="$ODOO_VERSION"
 
 # Install Odoo hard & soft dependencies, and Doodba utilities
-RUN build_deps=" \
+RUN --mount=target=/var/lib/apt/lists,type=cache,id=apt-lists-${TARGETARCH}-${ODOO_VERSION},sharing=locked \
+    --mount=target=/var/cache/apt,type=cache,id=apt-${TARGETARCH}-${ODOO_VERSION},sharing=locked \
+    --mount=target=/root/.cache/pip,type=cache,id=pip-cache \
+    --mount=target=/tmp,type=tmpfs \
+    build_deps=" \
         build-essential \
         libfreetype6-dev \
         libfribidi-dev \
@@ -146,10 +150,9 @@ RUN build_deps=" \
         wdb \
         geoip2 \
         inotify \
-    && (python3 -m compileall -q /usr/local/lib/python3.6/ || true) \
+    && (python3 -m compileall -q /usr/local/lib/python${PYTHON_VERSION%.*}/ || true) \
     && apt-get purge -yqq $build_deps \
-    && apt-get autopurge -yqq \
-    && rm -Rf /var/lib/apt/lists/* /tmp/*
+    && apt-get autopurge -yqq
 
 # Metadata
 ARG VCS_REF
@@ -180,6 +183,7 @@ ONBUILD RUN groupadd -g $GID odoo -o \
 # Subimage triggers
 ONBUILD ENTRYPOINT ["/opt/odoo/common/entrypoint"]
 ONBUILD CMD ["/usr/local/bin/odoo"]
+ONBUILD ARG TARGETARCH
 ONBUILD ARG AGGREGATE=true
 ONBUILD ARG DEFAULT_REPO_PATTERN="https://github.com/OCA/{}.git"
 ONBUILD ARG DEFAULT_REPO_PATTERN_ODOO="https://github.com/OCA/OCB.git"
@@ -205,6 +209,8 @@ ONBUILD ARG PGPASSWORD=odoopassword
 ONBUILD ARG PGHOST=db
 ONBUILD ARG PGPORT=5432
 ONBUILD ARG PGDATABASE=prod
+ONBUILD ARG HTTP_INTERFACE="0.0.0.0"
+ONBUILD ARG GITHUB_TOKEN
 
 # Config variables
 ONBUILD ENV ADMIN_PASSWORD="$ADMIN_PASSWORD" \
@@ -223,7 +229,8 @@ ONBUILD ENV ADMIN_PASSWORD="$ADMIN_PASSWORD" \
             SMTP_PASSWORD="$SMTP_PASSWORD" \
             SMTP_SSL="$SMTP_SSL" \
             EMAIL_FROM="$EMAIL_FROM" \
-            WITHOUT_DEMO="$WITHOUT_DEMO"
+            WITHOUT_DEMO="$WITHOUT_DEMO" \
+            HTTP_INTERFACE="$HTTP_INTERFACE"
 ONBUILD ARG LOCAL_CUSTOM_DIR=./custom
 ONBUILD COPY --chown=root:odoo $LOCAL_CUSTOM_DIR /opt/odoo/custom
 
@@ -234,6 +241,10 @@ ONBUILD RUN mkdir -p /opt/odoo/custom/ssh \
             && chmod -R u=rwX,go= /opt/odoo/custom/ssh \
             && sync
 ONBUILD ARG DB_VERSION=latest
-ONBUILD RUN /opt/odoo/common/build && sync
+ONBUILD RUN --mount=target=/var/lib/apt/lists,type=cache,id=apt-lists-${TARGETARCH}-${ODOO_VERSION},sharing=locked \
+            --mount=target=/var/cache/apt,type=cache,id=apt-${TARGETARCH}-${ODOO_VERSION},sharing=locked \
+            --mount=target=/root/.cache/pip,type=cache,id=pip-cache \
+            --mount=target=/tmp,type=tmpfs \
+            /opt/odoo/common/build && sync
 ONBUILD VOLUME ["/var/lib/odoo"]
 ONBUILD USER odoo

@@ -15,8 +15,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 DIR = dirname(__file__)
 ODOO_PREFIX = ("odoo", "--stop-after-init", "--workers=0")
-ODOO_VERSIONS = frozenset(environ.get("ODOO_MINOR", "19.0").split())
-PG_VERSIONS = frozenset(environ.get("PG_VERSIONS", "17").split())
+ODOO_VERSIONS = frozenset(environ.get("ODOO_MINOR", "20.0").split())
+PG_VERSIONS = frozenset(environ.get("PG_VERSIONS", "18").split())
 SCAFFOLDINGS_DIR = join(DIR, "scaffoldings")
 GEIOP_CREDENTIALS_PROVIDED = environ.get("GEOIP_LICENSE_KEY", False) and environ.get(
     "GEOIP_ACCOUNT_ID", False
@@ -31,7 +31,7 @@ GEIOP_CREDENTIALS_PROVIDED = environ.get("GEOIP_LICENSE_KEY", False) and environ
 #     ODOO_VERSIONS & {"16.0"}, "Tests not supported in pre-release"
 # )
 prerelease_skip = unittest.skipIf(
-    False, "Tests not supported in pre-release"
+    ODOO_VERSIONS & {"20.0"}, "Tests not supported in pre-release"
 )  # No pre-releases to test
 
 
@@ -82,16 +82,16 @@ class ScaffoldingCase(unittest.TestCase):
         if "DOCKER_TAG" in os.environ and not use_prebuilt_images:
             print(f"Building {os.environ['DOCKER_TAG']}-onbuild image...")
             cls.build_base_image(
-                f"tecnativa/doodba:{os.environ['DOCKER_TAG']}-onbuild",
+                f"tecnativa/doodba:{os.environ['DOCKER_TAG']}-onbuild-testonly",
                 f"{os.environ['ODOO_MINOR']}.Dockerfile",
             )
         elif not use_prebuilt_images:
             # We build the “onbuild” images with the latest changes for
             # testing instead of relying on the latest published ones.
             for ODOO_VER in ODOO_VERSIONS:
-                print(f"Building {ODOO_VER}-onbuild image...")
+                print(f"Building {ODOO_VER}-onbuild-testonly image...")
                 cls.build_base_image(
-                    f"tecnativa/doodba:{ODOO_VER}-onbuild",
+                    f"tecnativa/doodba:{ODOO_VER}-onbuild-testonly",
                     f"{ODOO_VER}.Dockerfile",
                 )
         else:
@@ -126,7 +126,7 @@ class ScaffoldingCase(unittest.TestCase):
         full_env = dict(environ, **sub_env)
         with self.subTest(PWD=workdir, **sub_env):
             try:
-                build_arg = f"ODOO_VERSION={full_env.get('DOCKER_TAG', full_env.get('ODOO_MINOR', '19.0'))}"
+                build_arg = f"ODOO_VERSION={full_env.get('DOCKER_TAG', full_env.get('ODOO_MINOR', '20.0'))}"
                 self.popen(
                     ("docker", "compose", "build", "--build-arg", build_arg),
                     cwd=workdir,
@@ -249,7 +249,7 @@ class ScaffoldingCase(unittest.TestCase):
 
     def test_addons_filtered_lt_16(self):
         """Test addons filtering with ``ONLY`` keyword in ``addons.yaml`` for versions < 16"""
-        self._check_addons("dotd", {"16.0", "17.0", "18.0", "19.0"})
+        self._check_addons("dotd", {"16.0", "17.0", "18.0", "19.0", "20.0"})
 
     def test_addons_filtered_ge_16(self):
         """Test addons filtering with ``ONLY`` keyword in ``addons.yaml`` for versions >= 16"""
@@ -363,8 +363,35 @@ class ScaffoldingCase(unittest.TestCase):
         )
         smallest_dir = join(SCAFFOLDINGS_DIR, "smallest")
         for sub_env in matrix():
+            if float(sub_env["ODOO_MINOR"]) >= 19.0:
+                # Replicas disabled with None
+                replica_command = (
+                    "grep",
+                    "-x",
+                    "db_replica_host = None",
+                    "/opt/odoo/auto/odoo.conf",
+                )
+            elif float(sub_env["ODOO_MINOR"]) >= 18.0:
+                # Replicas disabled with false
+                replica_command = (
+                    "grep",
+                    "-x",
+                    "db_replica_host = false",
+                    "/opt/odoo/auto/odoo.conf",
+                )
+            else:
+                # Replicas unsupported, settings must not be shipped
+                replica_command = (
+                    "bash",
+                    "-xc",
+                    "! grep -q db_replica /opt/odoo/auto/odoo.conf",
+                )
             self.compose_test(
-                smallest_dir, sub_env, *commands, ("python", "-c", "import watchdog")
+                smallest_dir,
+                sub_env,
+                *commands,
+                replica_command,
+                ("python", "-c", "import watchdog"),
             )
 
     def test_addons_env(self):
@@ -384,8 +411,8 @@ class ScaffoldingCase(unittest.TestCase):
                 ("test", "-e", "auto/addons/crm"),
                 ("test", "-d", "auto/addons/crm/migrations"),
             )
-        # TODO: Review error on 19.0
-        for sub_env in matrix(odoo_skip={"11.0", "12.0", "13.0", "19.0"}):
+        # TODO: Review error on 20.0
+        for sub_env in matrix(odoo_skip={"11.0", "12.0", "13.0", "20.0"}):
             self.compose_test(
                 join(SCAFFOLDINGS_DIR, "addons_env_ou"),
                 sub_env,
@@ -468,7 +495,7 @@ class ScaffoldingCase(unittest.TestCase):
 
     def test_dotd_lt_16(self):
         """Test environment with common ``*.d`` directories for versions < 16."""
-        self._check_dotd("dotd", {"16.0", "17.0", "18.0", "19.0"})
+        self._check_dotd("dotd", {"16.0", "17.0", "18.0", "19.0", "20.0"})
 
     def test_dotd_ge_16(self):
         """Test environment with common ``*.d`` directories for versions >= 16."""
@@ -520,7 +547,9 @@ class ScaffoldingCase(unittest.TestCase):
 
     def test_dependencies_lt_16(self):
         """Test dependencies installation for versions < 16"""
-        self._check_dependencies("dependencies", {"16.0", "17.0", "18.0", "19.0"})
+        self._check_dependencies(
+            "dependencies", {"16.0", "17.0", "18.0", "19.0", "20.0"}
+        )
 
     def test_dependencies_ge_16(self):
         """Test dependencies installation for versions >= 16"""
@@ -531,9 +560,9 @@ class ScaffoldingCase(unittest.TestCase):
     def test_dependencies_base_search_fuzzy(self):
         """Test dependencies installation."""
         dependencies_dir = join(SCAFFOLDINGS_DIR, "dependencies_base_search_fuzzy")
-        # TODO: Remove 19.0 from the matrix skip when 'base_search_fuzzy'
+        # TODO: Remove 20.0 from the matrix skip when 'base_search_fuzzy'
         # is available for that version
-        for sub_env in matrix(odoo_skip={"19.0"}):
+        for sub_env in matrix(odoo_skip={"20.0"}):
             self.compose_test(
                 dependencies_dir,
                 sub_env,
@@ -671,7 +700,8 @@ class ScaffoldingCase(unittest.TestCase):
                         "bash",
                         "-c",
                         "timeout 60s bash -c 'while (ls -l /proc/*/exe 2>&1 | grep geoipupdate); do sleep 1; done' &&"
-                        " geoipupdate",
+                        # ignore errors because of HTTP status code: 429: Daily GeoIP database download limit reached
+                        " geoipupdate 2> >(tee /tmp/geoipupdate_errors.log 1>&2) || grep 'HTTP status code: 429' /tmp/geoipupdate_errors.log >/dev/null",
                     ),
                     # verify that geoip database exists after entrypoint finished its update
                     # using ls and /proc because ps is missing in image for 13.0
@@ -857,11 +887,23 @@ class ScaffoldingCase(unittest.TestCase):
                     "{}",
                     ";",
                 ),
-                # install odoo base module
+                # check chromium version
+                ("chromium", "--version"),
+                # check that chromium is working before testing with odoo
+                (
+                    "chromium",
+                    "--no-sandbox",
+                    "--headless",
+                    "--dump-dom",
+                    "--enable-logging=stderr",
+                    "--v=1",
+                    "about:blank",
+                ),
+                # install odoo base/test_tests module
                 (
                     "odoo",
                     "-i",
-                    "base",
+                    "base" if float(sub_env["ODOO_MINOR"]) < 20.0 else "test_tests",
                     "--stop-after-init",
                 ),
                 # run odoo test for screencast

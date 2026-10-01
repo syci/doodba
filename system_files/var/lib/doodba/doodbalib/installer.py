@@ -60,7 +60,7 @@ class Installer(object):
 
 
 class AptInstaller(Installer):
-    _cleanup_commands = [["apt-get", "-y", "autoremove"], "rm -Rf /var/lib/apt/lists/*"]
+    _cleanup_commands = [["apt-get", "-y", "autoremove"]]
     _install_command = [
         "apt-get",
         "-o",
@@ -92,7 +92,7 @@ class GemInstaller(Installer):
 
 
 class NpmInstaller(Installer):
-    _cleanup_commands = ["rm -Rf ~/.npm /tmp/*"]
+    _cleanup_commands = ["rm -Rf ~/.npm "]
     _install_command = ["npm", "install", "-g"]
 
 
