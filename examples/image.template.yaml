@@ -1,7 +1,7 @@
 # Build de la subimagen Doodba. Copiar a la raíz del proyecto (junto a ./odoo).
 # El código entra por el ONBUILD; no monta ./odoo/custom.
 #
-#   IMAGE_TAG=16.0 docker compose -f image.template.yaml build
+#   DB_VERSION=16 IMAGE_TAG=16.0 docker compose -f image.template.yaml build
 name: ${PROJECT_NAME:-odoo}-image
 
 services:
@@ -12,7 +12,7 @@ services:
     build:
       context: ./odoo
       args:
-        DB_VERSION: "16"
+        DB_VERSION: "${DB_VERSION:-16}"
         ODOO_VERSION: "16.0"
         UID: "${UID:-1000}"
         GID: "${GID:-1000}"

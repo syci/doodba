@@ -1,7 +1,7 @@
 # Arranque de la imagen ya construida. Copiar a la raíz del proyecto.
 # No monta código. La base se carga con click-odoo-restoredb desde ./backups.
 #
-#   docker compose -f image-test.template.yaml up -d
+#   DB_VERSION=16 docker compose -f image-test.template.yaml up -d
 #   Odoo http://127.0.0.1:8069   MailHog http://127.0.0.1:8025
 name: ${PROJECT_NAME:-odoo}
 
@@ -71,9 +71,10 @@ services:
       proxy_www_w3_org:
         condition: service_started
 
-  # Postgres nuevo. Un volumen de otra versión mayor no arranca.
+  # Postgres. DB_VERSION es la versión mayor (16, 17, …).
+  # Un volumen creado con otra mayor no arranca.
   db:
-    image: ghcr.io/tecnativa/postgres-autoconf:16-alpine
+    image: ghcr.io/tecnativa/postgres-autoconf:${DB_VERSION:-16}-alpine
     shm_size: 4gb
     environment:
       POSTGRES_INITDB_ARGS: "--lc-collate=C"
