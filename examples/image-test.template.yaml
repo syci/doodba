@@ -1,0 +1,210 @@
+# Arranque de la imagen ya construida. Copiar a la raíz del proyecto.
+# No monta código. La base se carga con click-odoo-restoredb desde ./backups.
+#
+#   docker compose -f image-test.template.yaml up -d
+#   Odoo http://127.0.0.1:8069   MailHog http://127.0.0.1:8025
+name: ${PROJECT_NAME:-odoo}
+
+services:
+  # Publica Odoo en localhost. Reenvía puertos; no desvía /websocket al 8072.
+  odoo_proxy:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    depends_on:
+      - odoo
+    networks: &public
+      default:
+      public:
+    ports:
+      - "127.0.0.1:8069:8069"
+      - "127.0.0.1:8072:8072"
+    environment:
+      PORT: "8069 8072"
+      TARGET: odoo
+
+  # Usa la imagen local. Sin command: aplica el odoo.conf que quedó dentro.
+  odoo:
+    image: ${ODOO_IMAGE:-odoo}:${IMAGE_TAG:-16.0}
+    pull_policy: never
+    restart: unless-stopped
+    tty: true
+    environment:
+      TZ: "${TZ:-UTC}"
+      DOODBA_ENVIRONMENT: ${DOODBA_ENVIRONMENT:-prod}
+      PROXY_MODE: "true"
+      LIST_DB: "false"
+      INITIAL_LANG: "es_ES"
+      WITHOUT_DEMO: "all"
+      PGDATABASE: &dbname ${PGDATABASE:-odoo}
+      PGUSER: ${PGUSER:-odoo}
+      PGPASSWORD: ${PGPASSWORD:-odoo}
+      PGHOST: db
+      SMTP_SERVER: smtp
+      SMTP_PORT: "1025"
+    # Filestore persistente, backups de solo lectura y los dos ficheros del
+    # certificado en la ruta que guarda la ficha. No montar ./odoo/auto entero.
+    volumes:
+      - filestore:/var/lib/odoo:z
+      - ./backups:/opt/odoo/backups:ro
+      - ./certs/public.crt:/opt/odoo/auto/public.crt:ro
+      - ./certs/private.pem:/opt/odoo/auto/private.pem:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      smtp:
+        condition: service_started
+      proxy_cdnjs_cloudflare_com:
+        condition: service_started
+      proxy_fonts_googleapis_com:
+        condition: service_started
+      proxy_fonts_gstatic_com:
+        condition: service_started
+      proxy_www_google_com:
+        condition: service_started
+      proxy_www_googleapis_com:
+        condition: service_started
+      proxy_www_gravatar_com:
+        condition: service_started
+      proxy_prewww1_aeat_es:
+        condition: service_started
+      proxy_prewww2_aeat_es:
+        condition: service_started
+      proxy_www_w3_org:
+        condition: service_started
+
+  # Postgres nuevo. Un volumen de otra versión mayor no arranca.
+  db:
+    image: ghcr.io/tecnativa/postgres-autoconf:16-alpine
+    shm_size: 4gb
+    environment:
+      POSTGRES_INITDB_ARGS: "--lc-collate=C"
+      POSTGRES_DB: *dbname
+      POSTGRES_USER: ${PGUSER:-odoo}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-odoo}
+      CONF_EXTRA: |
+        work_mem = 512MB
+    volumes:
+      - db:/var/lib/postgresql/data:z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Bandeja local. SMTP 1025 dentro de la red; la web es el 8025.
+  smtp:
+    image: docker.io/mailhog/mailhog
+    networks:
+      default:
+      public:
+    ports:
+      - "127.0.0.1:8025:8025"
+
+  # Salida permitida. Cada proxy suplanta un hostname en la red interna
+  # y sale a internet por la red public. La red default no tiene salida.
+  proxy_cdnjs_cloudflare_com:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - cdnjs.cloudflare.com
+      public:
+    environment:
+      TARGET: cdnjs.cloudflare.com
+      PRE_RESOLVE: 1
+
+  proxy_fonts_googleapis_com:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - fonts.googleapis.com
+      public:
+    environment:
+      TARGET: fonts.googleapis.com
+      PRE_RESOLVE: 1
+
+  proxy_fonts_gstatic_com:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - fonts.gstatic.com
+      public:
+    environment:
+      TARGET: fonts.gstatic.com
+      PRE_RESOLVE: 1
+
+  proxy_www_google_com:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - www.google.com
+      public:
+    environment:
+      TARGET: www.google.com
+      PRE_RESOLVE: 1
+
+  proxy_www_googleapis_com:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - www.googleapis.com
+      public:
+    environment:
+      TARGET: www.googleapis.com
+      PRE_RESOLVE: 1
+
+  proxy_www_gravatar_com:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - www.gravatar.com
+      public:
+    environment:
+      TARGET: www.gravatar.com
+      PRE_RESOLVE: 1
+
+  proxy_prewww1_aeat_es:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - prewww1.aeat.es
+      public:
+    environment:
+      TARGET: prewww1.aeat.es
+      PRE_RESOLVE: 1
+
+  proxy_prewww2_aeat_es:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - prewww2.aeat.es
+      public:
+    environment:
+      TARGET: prewww2.aeat.es
+      PRE_RESOLVE: 1
+
+  proxy_www_w3_org:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - www.w3.org
+      public:
+    environment:
+      TARGET: www.w3.org
+      PRE_RESOLVE: 1
+
+networks:
+  default:
+    internal: ${DOODBA_NETWORK_INTERNAL-true}
+  public:
+
+volumes:
+  filestore:
+  db:

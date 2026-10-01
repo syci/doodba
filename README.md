@@ -646,6 +646,11 @@ help you generate your subproject.
 
 Check its docs to know how to use it.
 
+[`examples/image.template.yaml`](examples/image.template.yaml) builds a subimage with
+the aggregated code inside. [`examples/image-test.template.yaml`](examples/image-test.template.yaml)
+runs that image with its own Postgres, a local mail catcher and the outbound proxies.
+Copy both files to the project root, next to `./odoo`. Neither one mounts `./odoo/custom`.
+
 ## FAQ
 
 ### Will there be not retrocompatible changes on the image?

@@ -1,0 +1,44 @@
+# Build de la subimagen Doodba. Copiar a la raíz del proyecto (junto a ./odoo).
+# El código entra por el ONBUILD; no monta ./odoo/custom.
+#
+#   IMAGE_TAG=16.0 docker compose -f image.template.yaml build
+name: ${PROJECT_NAME:-odoo}-image
+
+services:
+  # Imagen a publicar. El tag lo fija IMAGE_TAG, no un build-arg.
+  # Sin AGGREGATE/CLEAN/COMPILE/PIP_INSTALL_ODOO: el ONBUILD los deja activos.
+  odoo:
+    image: ${ODOO_IMAGE:-odoo}:${IMAGE_TAG:-16.0}
+    build:
+      context: ./odoo
+      args:
+        DB_VERSION: "16"
+        ODOO_VERSION: "16.0"
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    restart: unless-stopped
+    tty: true
+    # Valores por defecto del contenedor. El compose de arranque puede pisarlos.
+    environment:
+      TZ: "${TZ:-UTC}"
+      PROXY_MODE: "true"
+      LIST_DB: "false"
+      INITIAL_LANG: "es_ES"
+      WITHOUT_DEMO: "all"
+      DOODBA_ENVIRONMENT: "${DOODBA_ENVIRONMENT-prod}"
+      PGHOST: "${PGHOST:-db}"
+      PGPORT: "${PGPORT:-5432}"
+      PGUSER: "${PGUSER:-odoo}"
+      PGPASSWORD: "${PGPASSWORD:-odoo}"
+      PGDATABASE: "${PGDATABASE:-odoo}"
+    # Solo filestore. El código no se monta.
+    volumes:
+      - filestore:/var/lib/odoo:z
+    # Con workers > 0 el websocket solo lo acepta el puerto 8072.
+    command:
+      - odoo
+      - --workers=2
+      - --max-cron-threads=1
+
+volumes:
+  filestore:
