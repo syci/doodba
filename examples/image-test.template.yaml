@@ -68,6 +68,16 @@ services:
         condition: service_started
       proxy_prewww2_aeat_es:
         condition: service_started
+      proxy_www1_agenciatributaria_gob_es:
+        condition: service_started
+      proxy_www2_agenciatributaria_gob_es:
+        condition: service_started
+      proxy_www10_agenciatributaria_gob_es:
+        condition: service_started
+      proxy_prewww10_aeat_es:
+        condition: service_started
+      proxy_sede_gobiernodecanarias_org:
+        condition: service_started
       proxy_www_w3_org:
         condition: service_started
 
@@ -188,6 +198,63 @@ services:
       public:
     environment:
       TARGET: prewww2.aeat.es
+      PRE_RESOLVE: 1
+
+  # SII AEAT. WSDL en www2. SOAP: www1, www10 (sello), prewww10 (pruebas sello).
+  proxy_www2_agenciatributaria_gob_es:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - www2.agenciatributaria.gob.es
+      public:
+    environment:
+      TARGET: www2.agenciatributaria.gob.es
+      PRE_RESOLVE: 1
+
+  proxy_www1_agenciatributaria_gob_es:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - www1.agenciatributaria.gob.es
+      public:
+    environment:
+      TARGET: www1.agenciatributaria.gob.es
+      PRE_RESOLVE: 1
+
+  proxy_www10_agenciatributaria_gob_es:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - www10.agenciatributaria.gob.es
+      public:
+    environment:
+      TARGET: www10.agenciatributaria.gob.es
+      PRE_RESOLVE: 1
+
+  proxy_prewww10_aeat_es:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - prewww10.aeat.es
+      public:
+    environment:
+      TARGET: prewww10.aeat.es
+      PRE_RESOLVE: 1
+
+  # SII ATC. Mismo host para producción y pruebas.
+  proxy_sede_gobiernodecanarias_org:
+    image: ghcr.io/tecnativa/docker-whitelist:latest
+    networks:
+      default:
+        aliases:
+          - sede.gobiernodecanarias.org
+      public:
+    environment:
+      TARGET: sede.gobiernodecanarias.org
       PRE_RESOLVE: 1
 
   proxy_www_w3_org:
